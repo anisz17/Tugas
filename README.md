@@ -1086,6 +1086,68 @@ Hal yang berguna diingat: `refresh_from_db()` memuat ulang objek dari database k
 
 ---
 
+#### Jenis-jenis pewarisan di proyek
+
+| Jenis | Ada? | Contoh di kode |
+|---|---|---|
+| Single | Ya | `CustomUser(AbstractUser)`, `AchievementGambarAdmin(admin.ModelAdmin)` |
+| Multilevel | Ya | `BukuDigital` → `ItemKatalog` → `models.Model` |
+| Hierarchical | Ya | `ItemKatalog` → `BukuDigital` dan `Jurnal` |
+| Multiple | Tidak ditulis sendiri | `AbstractUser` (Django) mewarisi `AbstractBaseUser` dan `PermissionsMixin` secara internal |
+| Hybrid | Tidak ada | - |
+
+**Single inheritance:** satu class mewarisi satu induk.
+
+```python
+class CustomUser(AbstractUser): ...
+```
+
+**Multilevel inheritance:** pewarisan berjenjang (kakek → ayah → anak).
+
+```python
+class ItemKatalog(models.Model):        # tingkat 1
+    class Meta:
+        abstract = True
+
+class BukuDigital(ItemKatalog):         # tingkat 2
+    ...
+```
+
+`BukuDigital` mendapat atribut dari `ItemKatalog` (judul, penulis, dan lainnya) dan method dari `models.Model` (`save()`, `delete()`, `objects`).
+
+**Hierarchical inheritance:** satu induk, banyak anak.
+
+```python
+class BukuDigital(ItemKatalog): ...
+class Jurnal(ItemKatalog): ...
+```
+
+Pola yang sama ada di `tests.py`, yaitu empat class tes yang semuanya mewarisi `TestCase`.
+
+**Multiple inheritance:** satu class mewarisi lebih dari satu induk (`class C(A, B)`). Proyek ini tidak menulisnya sendiri. `CustomUser` hanya mendapatkannya secara tidak langsung lewat `AbstractUser` bawaan Django.
+
+**Hybrid inheritance:** gabungan beberapa jenis di atas. Tidak ada di proyek ini.
+
+**Analogi:**
+- Single: anak dan orang tuanya.
+- Multilevel: cucu, ayah, kakek (tiga generasi).
+- Hierarchical: satu orang tua dengan dua anak (`BukuDigital` dan `Jurnal`).
+- Multiple: anak yang mewarisi sifat ayah dan ibu sekaligus.
+
+**Tanya-jawab:**
+
+**Q: Jenis pewarisan apa yang kamu pakai di proyekmu?**
+A: Multilevel, hierarchical, dan single. Multilevel: `BukuDigital` → `ItemKatalog` → `models.Model`. Hierarchical: `ItemKatalog` punya dua anak, `BukuDigital` dan `Jurnal`. Single: `CustomUser(AbstractUser)`.
+
+**Q: Apakah kamu memakai multiple inheritance?**
+A: Tidak saya tulis sendiri. `CustomUser` mewarisinya secara tidak langsung karena `AbstractUser` di Django mewarisi dua induk.
+
+**Q: Kenapa `BukuDigital` termasuk multilevel?**
+A: Karena rantai pewarisannya dua tingkat dalam kode saya: `BukuDigital(ItemKatalog)` dan `ItemKatalog(models.Model)`.
+
+**Q: Kenapa `BukuDigital` dan `Jurnal` termasuk hierarchical?**
+A: Karena keduanya anak dari satu induk yang sama, `ItemKatalog`.
+
 ## 6. Pertanyaan dan Jawaban
 
 ### A. Konsep OOP
