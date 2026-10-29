@@ -7,12 +7,12 @@ README ini disusun sebagai bahan belajar dan penjelasan proyek. Isinya:
 1. Gambaran proyek dan struktur
 2. Alur program
 3. Pengertian pilar OOP beserta analogi dan contoh kode
-4. Penerapan OOP di proyek (termasuk alasan mengapa sebuah contoh dihitung sebagai polimorfisme) dan relasi antarobjek (asosiasi, agregasi, komposisi, dependensi), semuanya dengan potongan kode
+4. Penerapan OOP di proyek (termasuk alasan mengapa sebuah contoh dihitung sebagai polimorfisme), relasi antarobjek (asosiasi, agregasi, komposisi, dependensi), dan peta OOP seluruh program (menu pengguna dan admin), semuanya dengan potongan kode
 5. Penjelasan kode penting per file
-6. Kumpulan pertanyaan dan jawaban
+6. Kumpulan pertanyaan dan jawaban (termasuk menu admin dan form)
 7. Catatan jujur (hal yang perlu dicek sebelum pengujian)
 
-> **Cakupan.** README ini hanya menjelaskan file yang sudah dilampirkan: `config/urls.py`, `perpustakaan/urls.py`, `models.py`, `admin.py`, `tests.py`, potongan `views.py`, serta template `dashboard.html`, `baca.html`, dan `kelola_buku.html`. Bagian yang belum dilampirkan ditandai di bagian 7.
+> **Cakupan.** README ini hanya menjelaskan file yang sudah dilampirkan: `config/urls.py`, `perpustakaan/urls.py`, `models.py`, `admin.py`, `apps.py`, `tests.py`, `views.py` (potongan), `views_admin.py` (bagian form dan view admin yang dibahas di 4.8), serta template `dashboard.html`, `baca.html`, `kelola_buku.html`, dan `base_admin.html`. Bagian yang belum dilampirkan ditandai di bagian 7.
 
 ---
 
@@ -126,7 +126,7 @@ Browser                   → menampilkan halaman (CSS/JS dari static)
    - menambah `detik_baca_hari_ini` (maksimal `TARGET_HARIAN_DETIK` = 1800 detik atau 30 menit) dan mereset hitungan jika tanggal berganti;
    - memanggil `reset_streak_if_expired()` dan `update_streak()` milik `CustomUser`;
    - mengirim notifikasi: streak 3/7/14/30, EXP bertambah, level naik (`level = exp // 100 + 1`), dan peringkat naik.
-5. Peringkat = 1 + jumlah member non-admin yang EXP-nya lebih tinggi.
+5. Peringkat = 1 + jumlah user yang EXP-nya lebih tinggi. Filter penghitungnya sedikit berbeda antar halaman: dashboard menghitung semua user, profil menghitung member, `waktu_baca` menghitung member non-admin, dan leaderboard memakai filter paling ketat (member, bukan admin, staff, atau superuser, dan tidak menunggu persetujuan).
 
 ### 2.5 Peta URL (ringkas)
 
@@ -257,7 +257,7 @@ A: Idenya sama, yaitu aturan dibungkus dalam method. `add_exp()` sederhana (tamb
 
 - `add_exp()` belum memeriksa nilai `points` (misalnya negatif), jadi pembungkusnya masih sederhana.
 - `self.save()` menyimpan semua field. Di bagian lain proyek, `save(update_fields=[...])` dipakai untuk menyimpan sebagian saja.
-- Di `waktu_baca` (`views.py`), EXP ditambah langsung (`user.exp += exp_gain`) lalu disimpan dengan `update_fields`, bukan lewat `add_exp()`. Cari `add_exp(` dengan `Ctrl+F` di `views.py` dan `views_admin.py` untuk melihat di mana method ini benar-benar dipanggil. Kalau penguji bertanya, tunjukkan pemanggilnya, dan kalau tidak ada, jawab jujur bahwa method ini disiapkan sebagai antarmuka resmi untuk menambah EXP.
+- Di `waktu_baca` (`views.py`), EXP ditambah langsung (`user.exp += exp_gain`) lalu disimpan dengan `update_fields`, bukan lewat `add_exp()`. Cari `add_exp(` dengan `Ctrl+F` di `views.py` dan `views_admin.py` untuk melihat di mana method ini benar-benar dipanggil. Kalau penguji bertanya, tunjukkan pemanggilnya, dan kalau tidak ada, jawab jujur bahwa method ini disiapkan sebagai antarmuka resmi untuk menambah EXP. (Hasil pemeriksaan ada di bagian 4.3: method ini belum dipanggil di `views.py` maupun `views_admin.py`.)
 
 
 Potongan kode proyek ada di bagian 4.3 (`add_exp`, `update_streak`, `reset_streak_if_expired`).
@@ -676,6 +676,8 @@ def reset_streak_if_expired(self):
 
 **Mengapa ini enkapsulasi:** data (`exp`, `streak_days`, `last_read_date`) dan aturan yang mengubahnya berada di satu objek. View `waktu_baca` cukup memanggil `user.update_streak()` tanpa menulis ulang aturan streak. Kalau aturan berubah, cukup diubah di satu tempat.
 
+**Catatan jujur tentang `add_exp()`:** method ini tidak dipanggil di `views.py` maupun `views_admin.py`. Periksa `dummy.py` dengan `Ctrl+F` kata `add_exp(`.
+
 **b. `@property` sebagai antarmuka baca:** `kategori_label`, `nama_asli`, dan `ikon_tampil` dihitung dari data lain dan dibaca seperti atribut biasa (`user.nama_asli`).
 
 ```python
@@ -1031,6 +1033,215 @@ class Pengaturan(models.Model):
 
 Cara mengingatnya: aturan streak berada di model, bukan di view dan bukan di template. Itu sebabnya `update_streak()` bisa dites tanpa membuka halaman.
 
+### 4.8 Peta OOP Seluruh Program (Pengguna dan Admin)
+
+View di proyek ini berupa **fungsi**, tidak ada class-based view. Karena itu OOP terkonsentrasi di lima tempat: `models.py`, form di `views_admin.py`, `admin.py`, `apps.py`, dan `tests.py`. View dan template berperan **memakai** objek-objek itu (dependensi dan asosiasi).
+
+#### 4.8.1 Daftar semua class
+
+| File | Class | Induk | OOP yang ditunjukkan |
+|---|---|---|---|
+| `models.py` | `ItemKatalog` | `models.Model` | Abstraksi (`abstract = True`), inner class `Meta` |
+| `models.py` | `BukuDigital` | `ItemKatalog` | Pewarisan (multilevel dan hierarchical), `@property kategori_label`, override `__str__` |
+| `models.py` | `Jurnal` | `ItemKatalog` | Pewarisan (hierarchical), override `__str__` |
+| `models.py` | `Peminjaman` | `models.Model` | Asosiasi, agregasi (`SET_NULL`), override `__str__` |
+| `models.py` | `Bookmark` | `models.Model` | Asosiasi (`CASCADE`), override `__str__` |
+| `models.py` | `Achievement` | `models.Model` | Override `__str__` (model lama, lihat catatan 10) |
+| `models.py` | `UserAchievement` | `models.Model` | Komposisi ke user (`related_name`), override `__str__` |
+| `models.py` | `Notifikasi` | `models.Model` | Komposisi ke user (`related_name`), `Meta.ordering` |
+| `models.py` | `CustomUser` | `AbstractUser` | Pewarisan, enkapsulasi (`add_exp`, `update_streak`, `reset_streak_if_expired`), `@property nama_asli`, override `save()` dan `__str__` |
+| `models.py` | `Pengaturan` | `models.Model` | Singleton, `@classmethod muat()`, override `save()` |
+| `models.py` | `AchievementGambar` | `models.Model` | `@property ikon_tampil`, `Meta.ordering` |
+| `views_admin.py` | `AchievementForm` | `forms.ModelForm` | Pewarisan, override `__init__` dengan `super()`, hook `clean_*`, inner class `Meta` |
+| `admin.py` | `AchievementGambarAdmin` | `admin.ModelAdmin` | Pewarisan, override atribut, enkapsulasi (`_preview`, `_ikon`), inner class `Media` |
+| `apps.py` | `PerpustakaanConfig` | `AppConfig` | Pewarisan (konfigurasi app) |
+| `tests.py` | `LocalCatalogLoanFlowTests`, `CollectionPaginationTests`, `DailyReadingGoalTests`, `ProfileAndAdminRegressionTests` | `TestCase` | Pewarisan (hierarchical), override `setUp()` |
+| `views.py` | tidak ada class | - | Hanya fungsi |
+
+Jenis-jenis pewarisan yang muncul (single, multilevel, hierarchical, multiple) dijelaskan lengkap dengan kode dan tanya-jawab di bagian "Jenis-jenis pewarisan di proyek" setelah bagian 5.5.
+
+#### 4.8.2 Menu pengguna
+
+| Menu | View | Model yang dipakai | OOP yang bekerja |
+|---|---|---|---|
+| Login, daftar, pemulihan OTP | `login_view`, `register_view`, `_proses_reset` | `CustomUser` | Pewarisan `AbstractUser` (`create_user`, `set_password`); helper internal `_hash_otp`, `_render_login` |
+| Dashboard | `dashboard` | `Peminjaman`, `Bookmark`, `BukuDigital`, `CustomUser` | `user.reset_streak_if_expired()`, `buku.kategori_label`, dependensi |
+| Katalog | `katalog_view` | `BukuDigital`, `Bookmark` | Abstraksi ORM (`Q`), `@property` |
+| Detail buku | `buku_detail` | `BukuDigital`, `Peminjaman`, `Bookmark` | Asosiasi, `user.max_loans` |
+| Pinjam, daftar pinjaman, kembali, perpanjang | `pinjam_buku`, `peminjaman_view`, `kembalikan_buku`, `perpanjang_buku` | `Peminjaman` | Asosiasi, agregasi (`SET_NULL`), helper `_jatuh_tempo` dan `_notifikasi` |
+| Baca buku | `baca_buku`, `simpan_progress`, `waktu_baca` | `Peminjaman`, `CustomUser` | `update_streak()`, `reset_streak_if_expired()` |
+| Bookmarks | `bookmarks_view`, `toggle_bookmark`, `hapus_bookmark_api` | `Bookmark` | Asosiasi, `CASCADE` |
+| E-journal | `ejournal_view`, `baca_jurnal` | `Jurnal` (dan `jurnal_teknik.json`) | Pewarisan `ItemKatalog` |
+| Riwayat | `riwayat_view` | `Peminjaman` | Asosiasi |
+| Leaderboard | `leaderboard_view` | `CustomUser` | ORM, `order_by("-exp", "pk")` |
+| Profil dan profil publik | `profil_view`, `profil_user_detail_view` | `CustomUser`, `Peminjaman` | `set_password()`, `@property nama_asli` |
+| Achievement | `achievement_view`, `update_pinned_achievement_api`, `_achievements` | `AchievementGambar`, `CustomUser` | Gabungan daftar bawaan dengan data yang dibuat admin |
+| Notifikasi | `notifikasi_view`, `buka_notifikasi` | `Notifikasi` | Komposisi (`CASCADE`), `Meta.ordering` |
+
+#### 4.8.3 Menu admin
+
+Semua view admin dilindungi `@user_passes_test(_boleh_admin, login_url="login")`.
+
+| Menu | View | Model yang dipakai | OOP yang bekerja |
+|---|---|---|---|
+| Dashboard admin | `dashboard_admin`, `_aktivitas_terbaru`, `_data_grafik_7_hari` | `BukuDigital`, `Jurnal`, `CustomUser`, `Peminjaman` | `Count("peminjaman")` lewat relasi balik, `@property nama_asli`, helper `_judul_item` |
+| Kelola buku | `kelola_buku`, `edit_buku`, `hapus_buku`, `hapus_buku_massal` | `BukuDigital`, `Notifikasi` | Pewarisan `ItemKatalog`, `kategori_label`, notifikasi ke semua anggota |
+| Kelola jurnal | `kelola_jurnal`, `edit_jurnal`, `hapus_jurnal`, `hapus_jurnal_massal` | `Jurnal`, `Notifikasi` | Pewarisan `ItemKatalog` |
+| Kelola achievement | `kelola_achievement`, `edit_achievement`, `hapus_achievement`, `hapus_achievement_massal` | `AchievementGambar` | `AchievementForm(forms.ModelForm)` |
+| Kelola anggota | `kelola_anggota`, `setujui_anggota`, `tolak_anggota`, `edit_anggota`, `hapus_anggota`, `aktifkan_anggota` | `CustomUser`, `Notifikasi` | `set_password()`, penghapusan lunak (soft delete), alur persetujuan |
+| Peminjaman dan pengembalian | `peminjaman_admin`, `_hitung_jatuh_tempo` | `Peminjaman` | Refleksi `_meta`, atribut dinamis pada objek |
+| Laporan | `laporan`, `unduh_laporan` | `Peminjaman`, `BukuDigital` | `label_kategori()`, `csv.writer` |
+| Pengumuman | `buat_pengumuman` | `Notifikasi` | `bulk_create`, komposisi ke user |
+
+#### 4.8.4 Potongan kode: pewarisan form (`AchievementForm`)
+
+```python
+# views_admin.py
+class AchievementForm(forms.ModelForm):          # pewarisan: induknya ModelForm milik Django
+    class Meta:                                  # inner class: pengaturan form
+        model = AchievementGambar
+        fields = ["nama", "kategori", "deskripsi", "tipe_syarat", "target",
+                  "gambar_terkunci", "gambar_terbuka"]
+
+    def __init__(self, *args, **kwargs):         # override konstruktor induk
+        super().__init__(*args, **kwargs)        # jalankan versi induk dulu
+        self.fields["nama"].error_messages["required"] = "wajib diisi."
+
+    def clean_nama(self):                        # hook validasi per field
+        nama = self.cleaned_data["nama"].strip()
+        ada = AchievementGambar.objects.filter(nama__iexact=nama)
+        if self.instance.pk:
+            ada = ada.exclude(pk=self.instance.pk)
+        if ada.exists():
+            raise forms.ValidationError("sudah dipakai achievement lain.")
+        return nama
+
+    def clean_target(self):
+        target = self.cleaned_data.get("target") or 0
+        if target < 1:
+            raise forms.ValidationError("minimal 1.")
+        return target
+
+    def _cek_ukuran(self, field):                # helper internal (enkapsulasi)
+        ...
+
+    def clean_gambar_terkunci(self):
+        return self._cek_ukuran("gambar_terkunci")
+```
+
+Satu class dipakai untuk tambah dan edit, hanya berbeda parameter `instance`:
+
+```python
+form = AchievementForm(request.POST, request.FILES)                  # tambah
+form = AchievementForm(request.POST, request.FILES, instance=ach)    # edit
+```
+
+**Mengapa ini OOP:**
+- **Pewarisan:** `AchievementForm` mewarisi semua kemampuan `ModelForm` (membuat field dari model, `is_valid()`, `save()`).
+- **Overriding:** `__init__` menimpa konstruktor induk, dan `super().__init__()` menjalankan versi induk.
+- **Hook:** `is_valid()` otomatis memanggil method bernama `clean_<nama_field>` bila ada. Method itu tidak menimpa method induk, melainkan titik perluasan yang dipanggil oleh framework.
+- **Enkapsulasi:** `_cek_ukuran` adalah helper internal yang dipakai dua method `clean_gambar_*`, jadi aturan ukuran 2 MB ditulis satu kali.
+
+#### 4.8.5 Potongan kode: agregasi yang terbukti di kode (`_judul_item`)
+
+```python
+# views_admin.py
+def _judul_item(obj):
+    item = obj.buku_digital or obj.jurnal
+    return item.judul if item else "Item sudah dihapus"
+```
+
+**Dua hal yang ditunjukkan:**
+
+1. **Agregasi.** Cabang `"Item sudah dihapus"` ada karena `Peminjaman.buku_digital` dan `Peminjaman.jurnal` memakai `SET_NULL`. Kalau buku dihapus, riwayat peminjaman tetap ada dengan kolom buku kosong, dan kode harus menanganinya. Fungsi ini dipakai di `_aktivitas_terbaru` dan `unduh_laporan`.
+2. **Polimorfisme dalam arti luas.** `BukuDigital` dan `Jurnal` sama-sama mewarisi `judul` dari `ItemKatalog`, jadi satu baris `item.judul` bekerja untuk keduanya tanpa memeriksa tipe. Komentar di kode menyebutnya "polimorfisme lewat pewarisan".
+
+**Catatan jujur untuk poin 2:** ini polimorfisme berbasis antarmuka bersama (substitusi subclass), bukan overriding, dan perilakunya tidak berbeda per class karena yang dibaca hanya atribut. Untuk contoh yang paling jelas, tetap tunjuk `__str__` dan `Peminjaman.__str__` di bagian 4.4. Gunakan `_judul_item` sebagai contoh pendukung.
+
+#### 4.8.6 Potongan kode: pewarisan template admin
+
+```django
+{# base_admin.html: induk, berisi kerangka dan sidebar #}
+<title>{% block title %}Lentera Admin{% endblock %}</title>
+{% block extra_css %}{% endblock %}
+<h1>{% block page_title %}Dashboard{% endblock %}</h1>
+<p>{% block page_subtitle %}{% endblock %}</p>
+{% block content %}{% endblock %}
+{% block extra_js %}{% endblock %}
+```
+
+```django
+{# kelola_buku.html: anak, hanya mengisi blok #}
+{% extends 'perpustakaan/base_admin.html' %}
+{% block page_title %}Kelola Buku{% endblock %}
+{% block content %} ... {% endblock %}
+```
+
+Sidebar menandai menu aktif dengan membandingkan nama URL halaman yang sedang dibuka:
+
+```django
+{% with url_now=request.resolver_match.url_name %}
+  <a href="{% url 'kelola_buku' %}" class="{% if url_now == 'kelola_buku' %}active{% endif %}">
+```
+
+Nama `kelola_buku` berasal dari `name=` di `urls.py`, jadi urls, template, dan view terhubung lewat nama yang sama.
+
+#### 4.8.7 Potongan kode: penghapusan lunak dan alur persetujuan anggota
+
+```python
+# views_admin.py
+def hapus_anggota(request, pk):
+    if request.method == "POST":
+        user = get_object_or_404(_queryset_anggota(), pk=pk)
+        user.is_active = False                       # hanya menonaktifkan
+        user.save(update_fields=["is_active"])
+
+def tolak_anggota(request, pk):
+    if request.method == "POST":
+        user = get_object_or_404(_queryset_pendaftar(), pk=pk)
+        user.delete()                                # pendaftar baru: dihapus sungguhan
+```
+
+- `hapus_anggota` tidak menghapus baris. Karena `Peminjaman.user` memakai `CASCADE`, menghapus user akan menghapus riwayat pinjamnya, jadi anggota hanya dinonaktifkan.
+- `tolak_anggota` boleh `delete()` karena pendaftar yang baru mendaftar belum punya riwayat.
+
+Alur persetujuan: `register_view` membuat user dengan `is_active=False` dan `menunggu_persetujuan=True` → admin memilih `setujui_anggota` → `is_active=True`, `menunggu_persetujuan=False`, dan sebuah `Notifikasi` dibuat untuk user itu.
+
+#### 4.8.8 Konsep pendukung tambahan
+
+**Refleksi (introspeksi model)** di `views_admin.py`:
+
+```python
+_USER_FIELD = next(
+    (f.name for f in Peminjaman._meta.fields
+     if f.is_relation and f.related_model is CustomUser),
+    "user",
+)
+```
+
+Kode membaca struktur class `Peminjaman` saat dijalankan untuk mencari field yang menunjuk ke `CustomUser`. Hasilnya dipakai di `peminjaman_admin`, `laporan`, dan `unduh_laporan`.
+
+**Atribut dinamis pada objek:**
+
+```python
+for p in daftar:
+    p.pengguna = getattr(p, _USER_FIELD)
+    p.item = p.buku_digital or p.jurnal
+    p.jatuh_tempo_tampil = jatuh_tempo
+```
+
+`pengguna`, `item`, dan `jatuh_tempo_tampil` bukan field model. View menempelkannya pada objek sebelum dikirim ke template. Teknik yang sama dipakai untuk `jatuh_tempo` dan `total_pembaca`.
+
+**`AppConfig`:**
+
+```python
+# apps.py
+class PerpustakaanConfig(AppConfig):
+    name = 'perpustakaan'
+```
+
+Class ini mewarisi `AppConfig` untuk mendaftarkan app ke Django. Tidak ada method `ready()`, jadi tidak ada signal yang didaftarkan di sini.
+
 ---
 
 ## 5. Penjelasan Kode Penting per File
@@ -1042,7 +1253,7 @@ Cara mengingatnya: aturan streak berada di model, bukan di view dan bukan di tem
 - **`Peminjaman`:** punya dua `ForeignKey` yang boleh kosong (`buku_digital` dan `jurnal`) karena satu peminjaman berisi salah satunya. Field penting: `status` (`Dibaca`/`Selesai`), `progress_baca` (0–100), `waktu_baca_detik`, `perpanjangan`.
 - **`Notifikasi`:** jenis `katalog`, `pengumuman`, `peminjaman`, `tenggat`, `gamifikasi`; diurutkan terbaru dulu lewat `Meta.ordering`.
 - **`CustomUser`:** menambah `is_admin`, `is_member`, `menunggu_persetujuan`, profil, OTP, `exp`, `waktu_baca_detik`, `detik_baca_hari_ini`, `streak_days`, `last_read_date`, `max_loans`, `pinned_achievements`.
-- **`Pengaturan`:** singleton berisi `masa_pinjam_hari` (default 14).
+- **`Pengaturan`:** singleton berisi `masa_pinjam_hari` (default 14). Model ini hanya didaftarkan di Django admin. Tidak ada view yang membacanya. Masa pinjam memakai konstanta `MASA_PINJAM_HARI = 14` di `views.py`.
 - **`AchievementGambar`:** achievement dengan gambar terkunci/terbuka, `tipe_syarat` (buku_selesai, buku_dimulai, genre, pinjam_total, pinjam_selesai, bookmark, exp, streak), dan `target`. `ikon_tampil` memakai urutan: field `ikon` → kamus `IKON_ACHIEVEMENT_BERSIH` → kosong.
 - **`path_gambar_terkunci/terbuka`:** nama file upload diganti `uuid` agar unik dan aman.
 
@@ -1090,9 +1301,9 @@ Hal yang berguna diingat: `refresh_from_db()` memuat ulang objek dari database k
 
 | Jenis | Ada? | Contoh di kode |
 |---|---|---|
-| Single | Ya | `CustomUser(AbstractUser)`, `AchievementGambarAdmin(admin.ModelAdmin)` |
-| Multilevel | Ya | `BukuDigital` → `ItemKatalog` → `models.Model` |
-| Hierarchical | Ya | `ItemKatalog` → `BukuDigital` dan `Jurnal` |
+| Single | Ya | `CustomUser(AbstractUser)`, `AchievementGambarAdmin(admin.ModelAdmin)`, `AchievementForm(forms.ModelForm)`, `PerpustakaanConfig(AppConfig)` |
+| Multilevel | Ya | `BukuDigital` → `ItemKatalog` → `models.Model` (juga `Jurnal`) |
+| Hierarchical | Ya | `ItemKatalog` → `BukuDigital` dan `Jurnal`; `TestCase` → empat class tes |
 | Multiple | Tidak ditulis sendiri | `AbstractUser` (Django) mewarisi `AbstractBaseUser` dan `PermissionsMixin` secara internal |
 | Hybrid | Tidak ada | - |
 
@@ -1245,7 +1456,7 @@ Field `perpanjangan` dihitung. Jika sudah mencapai `MAKS_PERPANJANG`, perpanjang
 `waktu_baca` membatasi detik yang diklaim browser sebesar selisih waktu nyata sejak permintaan sebelumnya (disimpan di `session["ring_terakhir"]`).
 
 **31. Bagaimana peringkat dan level dihitung?**
-Peringkat = 1 + jumlah member non-admin yang EXP-nya lebih tinggi. Level = `exp // 100 + 1`.
+Peringkat = 1 + jumlah user yang EXP-nya lebih tinggi. Filter penghitungnya sedikit berbeda antar halaman: dashboard menghitung semua user, profil menghitung member, `waktu_baca` menghitung member non-admin, dan leaderboard memakai filter paling ketat (member, bukan admin, staff, atau superuser, dan tidak menunggu persetujuan). Level = `exp // 100 + 1`.
 
 **32. Kenapa user tidak bisa mengembalikan atau memperpanjang pinjaman orang lain?**
 `get_object_or_404(Peminjaman, id=..., user=request.user)` hanya menemukan pinjaman milik user yang login; selain itu hasilnya 404.
@@ -1365,16 +1576,73 @@ Nama jalan balik dari objek induk ke objek terkait, misalnya `user.notifikasi.al
 
 **Tips menunjuk kode:** komentar di `models.py` memakai penanda yang bisa dicari dengan `Ctrl+F`: `[ABSTRAKSI]`, `[PEWARISAN]`, `[POLIMORFISME - overriding]`, dan `ASOSIASI ANTAROBJEK`. Buka file itu dan cari penanda tersebut kalau penguji meminta ditunjukkan.
 
+### I. Tanya-jawab menu admin dan form
+
+**65. Apa itu `ModelForm` dan mengapa dipakai untuk achievement?**
+Form yang field-nya dibuat otomatis dari model (`AchievementGambar`). Validasi dan penyimpanan (`is_valid()`, `save()`) disediakan Django, jadi tidak ditulis manual.
+
+**66. Apa fungsi `super().__init__(*args, **kwargs)` di `AchievementForm`?**
+Menjalankan konstruktor class induk (`ModelForm`) dulu, baru kemudian pesan error khusus ditambahkan. Tanpa itu, field form tidak terbentuk.
+
+**67. Bagaimana `clean_nama()` bisa dipanggil tanpa dipanggil manual?**
+Saat `form.is_valid()` dijalankan, Django mencari method bernama `clean_<nama_field>` dan memanggilnya otomatis untuk field itu.
+
+**68. Bagaimana satu form dipakai untuk tambah dan edit?**
+Tambah: `AchievementForm(request.POST, request.FILES)`. Edit: ditambah `instance=ach`, sehingga `save()` memperbarui objek yang ada.
+
+**69. Kenapa `_judul_item` mengembalikan "Item sudah dihapus"?**
+Karena `Peminjaman.buku_digital` dan `jurnal` memakai `SET_NULL`. Kalau bukunya dihapus, riwayat tetap ada dengan relasi kosong. Ini contoh agregasi.
+
+**70. Apa beda `hapus_anggota` dan `tolak_anggota`?**
+`hapus_anggota` hanya menonaktifkan akun (`is_active=False`) supaya riwayat pinjam tetap ada. `tolak_anggota` menghapus akun karena pendaftar baru belum punya riwayat.
+
+**71. Bagaimana halaman admin dilindungi?**
+Dengan `@user_passes_test(_boleh_admin, login_url="login")`. Fungsi `_boleh_admin` mengembalikan `True` bila user sudah login dan `is_staff`, `is_superuser`, atau `is_admin`.
+
+**72. Apa fungsi `base_admin.html` dan blok apa saja yang ada?**
+Template induk untuk semua halaman admin (sidebar, header, CSS). Blok yang bisa diisi: `title`, `extra_css`, `page_title`, `page_subtitle`, `content`, `extra_js`.
+
+**73. Bagaimana sidebar tahu menu mana yang aktif?**
+Dengan `request.resolver_match.url_name` yang dibandingkan dengan nama URL tiap menu di template.
+
+**74. Bagaimana pengumuman dikirim ke semua anggota?**
+`buat_pengumuman` membuat objek `Notifikasi` untuk setiap anggota dengan `bulk_create`, yaitu satu query untuk banyak data. Berbeda dengan `kelola_buku` yang membuat notifikasi satu per satu di dalam perulangan.
+
+**75. Kenapa `Count("peminjaman")` bisa dipakai pada `BukuDigital`?**
+`Peminjaman` punya `ForeignKey` ke `BukuDigital`, sehingga Django menyediakan relasi balik bernama `peminjaman`. Jadi jumlah peminjaman per buku bisa dihitung langsung.
+
+**76. Dari mana `total_pembaca` di `kelola_buku.html` berasal?**
+Bukan field model. View menghitung `Peminjaman.objects.filter(buku_digital=b).count()` untuk tiap buku, lalu menempelkannya sebagai atribut pada objek `b`.
+
+**77. Apa itu `AppConfig`?**
+Class konfigurasi app di Django. `PerpustakaanConfig` mewarisinya dan hanya menentukan `name = 'perpustakaan'`.
+
+**78. Apa yang terjadi saat admin menghapus buku yang sedang dipinjam?**
+`Peminjaman` tetap ada dengan kolom buku kosong (`SET_NULL`), sedangkan `Bookmark` untuk buku itu ikut terhapus (`CASCADE`). Di tabel admin judulnya tampil "Item sudah dihapus".
+
+**79. Bagaimana alur persetujuan anggota baru?**
+Daftar → akun dibuat nonaktif dan menunggu persetujuan → admin menyetujui → akun diaktifkan, notifikasi dikirim → anggota bisa login.
+
+**80. Bagaimana laporan CSV dibuat?**
+`unduh_laporan` memakai `csv.writer` pada objek `HttpResponse` bertipe `text/csv`, dengan penanda `\ufeff` supaya Excel membaca UTF-8 dengan benar.
+
 ---
 
 ## 7. Catatan Jujur (Cek Sebelum Pengujian)
 
-1. **Tes EXP vs. kode pengembalian.** `tests.py` menegaskan `self.user.exp == 50` setelah buku dikembalikan, tetapi `kembalikan_buku` yang dilampirkan **tidak menambah EXP**. EXP bertambah di `waktu_baca`. Jalankan `python manage.py test` untuk memastikan hasilnya. Jika tes itu gagal, kemungkinan sumbernya EXP yang dipindah ke sistem waktu baca dan tes belum disesuaikan.
+1. **Tes EXP vs. kode pengembalian.** `tests.py` menegaskan `self.user.exp == 50` setelah buku dikembalikan, tetapi `kembalikan_buku` tidak menambah EXP, `models.py` tidak punya signal, dan `apps.py` tidak punya `ready()`. EXP hanya bertambah di `waktu_baca` (10 EXP setiap 120 detik membaca). Jalankan `python manage.py test` untuk memastikan tes itu gagal, lalu jawab jujur bahwa tes belum disesuaikan dengan sistem EXP yang baru.
 2. **`CustomUser.save()` belum menambah perilaku.** Method itu hanya memanggil `super().save()`. Secara teknis overriding, tetapi bukan contoh polimorfisme yang kuat.
 3. **Kode tidak terjangkau di `admin.py`.** Di `_ikon`, semua kode setelah `return` pertama tidak pernah dijalankan, dan memakai `IKON_ACHIEVEMENT_BERSIH` yang tidak di-import di file itu. Logikanya sudah dipindah ke properti `ikon_tampil` di model; sisa lamanya belum dihapus.
 4. **`id_item` memakai `unique=True` dan `primary_key=True` sekaligus.** `unique` redundan, tetapi tidak merusak.
 5. **`simpan_progress` didaftarkan di `config/urls.py`,** bukan di `perpustakaan/urls.py` bersama alamat lainnya. Berfungsi normal; bisa dipindahkan.
 6. **`baca.html` masih punya CSS `iframe`** dengan komentar Internet Archive, kemungkinan sisa versi lama karena buku sekarang dibaca lewat PDF.js.
 7. **Tipe `pk` anggota tidak seragam** di `urls.py`: `<str:pk>` untuk edit/hapus/aktifkan, `<int:pk>` untuk setujui/tolak.
-8. **Belum dilampirkan, sehingga belum dijelaskan baris per baris:** `katalog.html`, `peminjaman.html`, `views_admin.py`, `baca_buku`, `simpan_progress`, dan helper di `views.py` (`_pastikan_buku`, `_jatuh_tempo`, `_notifikasi`), serta nilai konstanta `ITEM_ID_RE`, `MASA_PINJAM_HARI`, `MAKS_PERPANJANG`, `RING_DETIK_PENUH`, `RING_EXP`. Nilai `data-total="120"` di `baca.html` juga perlu dicek artinya di `baca-ring.js`.
+8. **Konstanta sudah diketahui:** `MASA_PINJAM_HARI = 14`, `MASA_PERPANJANG_HARI = 7`, `MAKS_PERPANJANG = 1`, `RING_DETIK_PENUH = 120`, `RING_EXP = 10`. Yang masih perlu dicek hanya `baca-ring.js` (arti `data-total="120"`), `katalog.html`, dan `peminjaman.html`.
 9. **Agregasi dan komposisi adalah tafsiran.** Pemetaan di bagian 4.5 berasal dari perilaku `on_delete` (`SET_NULL` dan `CASCADE`), bukan sesuatu yang tertulis di kode. Komentar di `models.py` hanya menyebut "asosiasi antarobjek". Jelaskan sebagai perilaku, dan jangan mengklaim bahwa Django mendefinisikannya secara eksplisit.
+10. **Model `Achievement` dan `UserAchievement` tidak dipakai view.** Keduanya hanya didaftarkan di `admin.py`. Sistem achievement yang berjalan memakai `AchievementGambar` dan fungsi `_achievements()`. Kemungkinan sisa dari versi awal.
+11. **`unduh_laporan`: `return response` berada di dalam perulangan.** Seperti yang terlihat, baris itu menjorok satu tingkat di bawah `for p in qs:`, sehingga fungsi berhenti setelah baris data pertama, dan kalau tidak ada data, fungsi tidak mengembalikan apa pun. Unduh laporan lewat browser untuk memastikan, dan perbaikannya hanya menggeser baris itu satu tingkat ke kiri.
+12. **Aturan jatuh tempo ditulis di dua tempat.** `_jatuh_tempo` di `views.py` memakai 14 hari ditambah 7 hari per perpanjangan, sedangkan cadangan di `_hitung_jatuh_tempo` memakai `LAMA_PINJAM_HARI × (1 + jumlah perpanjangan)`, yaitu 14 hari per perpanjangan. Hasilnya berbeda bila `tanggal_kembali` kosong dan ada perpanjangan.
+13. **Hitungan `total_pembaca` dilakukan satu query per buku** (di `kelola_buku` dan `kelola_jurnal`), sedangkan `dashboard_admin` memakai `annotate(Count(...))` yang lebih efisien. Bisa jadi bahan perbaikan.
+14. **`kelola_buku` membuat notifikasi dengan perulangan `create`**, sedangkan `buat_pengumuman` memakai `bulk_create`. Keduanya benar, hanya berbeda efisiensi.
+15. **Halaman `buat_pengumuman` tidak ada di sidebar `base_admin.html`.** Cek dari mana halaman itu dibuka (mungkin dari `dashboard_admin.html`).
+16. **Dua helper admin berbeda definisi.** `is_admin` di `views.py` tidak memeriksa `is_superuser`, sedangkan `_boleh_admin` di `views_admin.py` memeriksanya.
