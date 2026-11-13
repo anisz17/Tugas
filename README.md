@@ -1,4 +1,4 @@
-<a id="top"></a>
+\<a id="top"></a>
 
 <div align="center">
 
@@ -37,6 +37,8 @@
    - [Contekan Modul 6](#contekan-modul-6)
 9. [Modul 7 · Manajemen Penyimpanan](#modul-7)
 10. [Modul 8 · Keamanan Komputer](#modul-8)
+    - [Latihan (8 soal)](#modul-8-latihan)
+    - [Contekan Modul 8](#contekan-modul-8)
 11. [Kesalahan Paling Sering Terulang](#kesalahan)
 12. [Checklist Sebelum Ujian](#checklist)
 
@@ -67,8 +69,8 @@
 | 5 | Deadlock | **5** |
 | 6 | Manajemen Memori (Memori 1 dan 2) | 7 (Set 1) + 11 (Set 2) = **18** |
 | 7 | Manajemen Penyimpanan | **5** |
-| 8 | Keamanan Komputer | belum ada soal, hanya **ringkasan konsep dan command** |
-| | **Total** | **85** |
+| 8 | Keamanan Komputer | **8** (+ ringkasan konsep dan command) |
+| | **Total** | **93** |
 
 > ℹ️ **Catatan:** semua soal latihan di sini buatan Claude. Set 2 Modul 2 mengikuti alur contoh posttest, tetapi seluruh nama folder, user, dan grup sudah diganti. Modul 3 dan Modul 6 punya dua set karena dikerjakan di dua sesi belajar berbeda (nama folder dan program contoh berbeda, isi konsepnya saling melengkapi). Modul 4 dan 5 memakai **Python** (`threading`), bukan hanya perintah Bash.
 
@@ -2574,7 +2576,7 @@ SSTF: 100 -> 95 -> 119 -> 123 -> 180 -> 64 -> 62 -> 34 -> 11
 
 # 🛡️ Modul 8 · Keamanan Komputer
 
-> ℹ️ Materi sudah dijelaskan, tetapi **belum ada soal latihan** yang dikerjakan di modul ini. Berikut ringkasan konsep dan command kuncinya untuk dihafal.
+> ℹ️ Berikut ringkasan konsep, 8 soal latihan beserta jawabannya, lalu contekan command kunci untuk dihafal.
 
 ### Konsep inti
 
@@ -2585,6 +2587,208 @@ SSTF: 100 -> 95 -> 119 -> 123 -> 180 -> 64 -> 62 -> 34 -> 11
 | **DAC** | pemilik file yang menentukan akses (rwx, ACL, sudo). Root bisa melewatinya |
 | **MAC** | aturan per program yang berlaku bahkan untuk root (**AppArmor** di Ubuntu, **SELinux** di Red Hat) |
 | **Least privilege** | setiap user dan program hanya diberi hak seminimal yang cukup |
+
+<a id="modul-8-latihan"></a>
+
+## Latihan (8 soal)
+
+Dikerjakan di akun `magang`. Memakai user uji **`tamu`** supaya akun `magang` tidak ikut terkunci atau berubah.
+
+> ⚠️ **Jangan** mengunci akun `magang` atau mengubah SSH dan firewall tanpa aturan `allow` SSH. Itu bisa mengunci dirimu sendiri dari VM.
+
+### Soal 1 — Kunci dan buka akun
+
+> 📝 **Soal:** Buat user `tamu` lengkap dengan home dan password. Tampilkan status akunnya, kunci akun itu, lalu tampilkan status dan baris `tamu` di `/etc/shadow` untuk membuktikan terkunci. Terakhir buka kuncinya dan tampilkan statusnya lagi.
+
+✅ **Jawaban**
+
+```bash
+sudo useradd -m tamu
+sudo passwd tamu
+sudo passwd -S tamu
+sudo passwd -l tamu
+sudo passwd -S tamu
+sudo grep tamu /etc/shadow
+sudo passwd -u tamu
+sudo passwd -S tamu
+```
+
+Hasil status berurutan: `tamu P ...` (aktif), `tamu L ...` (terkunci), lalu `tamu P ...` lagi. Pada `/etc/shadow`, hash password diawali tanda `!` (contoh `tamu:!$y$...`).
+
+💡 `passwd -l` tidak menghapus password, hanya menambah `!` di depan hash sehingga password tidak cocok lagi. `-u` menghapus tanda itu. `-S` (besar) menampilkan status, `-l` dan `-u` (kecil) mengubahnya.
+
+⚠️ Akun tanpa password tidak bisa dibuka kuncinya dengan `-u`, jadi isi password dulu.
+
+---
+
+### Soal 2 — Aturan sudo minimal (*least privilege*)
+
+> 📝 **Soal:** Beri user `tamu` hak sudo yang **hanya** boleh menjalankan `/usr/bin/apt update`, lewat file aturan khusus `/etc/sudoers.d/tamu` yang diperiksa sintaksnya. Buktikan dengan melihat hak sudo `tamu`, lalu hapus aturannya.
+
+✅ **Jawaban**
+
+```bash
+sudo visudo -f /etc/sudoers.d/tamu
+```
+
+Isi file (satu baris):
+
+```text
+tamu ALL=(ALL) /usr/bin/apt update
+```
+
+Simpan lalu:
+
+```bash
+sudo -l -U tamu
+sudo rm /etc/sudoers.d/tamu
+sudo -l -U tamu
+```
+
+Hasil `sudo -l -U tamu` pertama memuat `(ALL) /usr/bin/apt update`. Setelah dihapus, hasilnya `User tamu is not allowed to run sudo`.
+
+💡 Prinsip *least privilege*: hanya diberi hak seminimal yang cukup, bukan `ALL`. `visudo -f` memeriksa sintaks sebelum menyimpan, sehingga file yang salah tidak merusak sudo.
+
+⚠️ Kalau `visudo` bertanya "What now?", tekan `e` untuk mengedit ulang, bukan `Q`.
+
+---
+
+### Soal 3 — ACL
+
+> 📝 **Soal:** Buat `/tmp/laporan.txt` berisi `data rahasia` yang hanya bisa dibaca pemiliknya. Beri user `tamu` hak baca **saja** lewat ACL, tampilkan ACL-nya, buktikan `tamu` bisa membaca, lalu cabut entri ACL `tamu` dan buktikan `tamu` ditolak lagi.
+
+✅ **Jawaban**
+
+```bash
+echo "data rahasia" > /tmp/laporan.txt
+chmod 600 /tmp/laporan.txt
+setfacl -m u:tamu:r /tmp/laporan.txt
+getfacl /tmp/laporan.txt
+sudo -u tamu cat /tmp/laporan.txt
+setfacl -x u:tamu /tmp/laporan.txt
+sudo -u tamu cat /tmp/laporan.txt
+```
+
+Hasil: `getfacl` memuat baris `user:tamu:r--`, `cat` pertama menampilkan `data rahasia`, dan `cat` kedua `Permission denied`.
+
+💡 ACL menambah hak untuk user tertentu tanpa mengubah pemilik atau grup (ini contoh **DAC**: pemilik file yang menentukan akses). Pada `ls -l`, file ber-ACL ditandai `+` di akhir izin. `-m` mengubah/menambah entri, `-x` menghapus entri.
+
+---
+
+### Soal 4 — Mode AppArmor
+
+> 📝 **Soal:** Tampilkan status AppArmor. Untuk program contoh modul `/usr/local/bin/kucing` (profilnya sudah dibuat di praktik modul), ubah ke mode *complain*, buktikan, kembalikan ke mode *enforce*, buktikan, lalu muat ulang profilnya.
+
+✅ **Jawaban**
+
+```bash
+sudo aa-status
+sudo aa-complain /usr/local/bin/kucing
+sudo aa-status | grep kucing
+sudo aa-enforce /usr/local/bin/kucing
+sudo aa-status | grep kucing
+sudo apparmor_parser -r /etc/apparmor.d/usr.local.bin.kucing
+```
+
+Setelah `aa-complain`, `kucing` muncul di daftar profil mode *complain*. Setelah `aa-enforce`, pindah ke daftar profil mode *enforce*.
+
+💡 AppArmor adalah **MAC**: aturan per program yang berlaku bahkan untuk root. *Complain* hanya mencatat pelanggaran (untuk menguji profil), *enforce* benar-benar menolaknya.
+
+---
+
+### Soal 5 — Log (*Accounting*)
+
+> 📝 **Soal:** Jalankan satu perintah `sudo` apa saja, lalu tampilkan 20 log terakhir penggunaan sudo dan 20 log terakhir service SSH tanpa pager.
+
+✅ **Jawaban**
+
+```bash
+sudo whoami
+sudo journalctl -t sudo -n 20 --no-pager
+sudo journalctl -u ssh -n 20 --no-pager
+```
+
+Hasil pertama memuat baris dengan `COMMAND=/usr/bin/whoami` milik `magang`. Hasil kedua memuat catatan login SSH (`Accepted password for ...`).
+
+💡 Ini contoh **Accounting** pada AAA: mencatat siapa melakukan apa. `-t` memilih berdasarkan tag, `-u` berdasarkan service, `-n 20` 20 baris terakhir, `--no-pager` mencetak langsung tanpa `less`.
+
+---
+
+### Soal 6 — Firewall `ufw`
+
+> 📝 **Soal:** Atur firewall: tutup semua koneksi masuk secara default, izinkan SSH (port 22/tcp), aktifkan firewall, lalu tampilkan status lengkapnya.
+
+✅ **Jawaban**
+
+```bash
+sudo ufw default deny incoming
+sudo ufw allow 22/tcp
+sudo ufw enable
+sudo ufw status verbose
+```
+
+Hasil: `Status: active`, `Default: deny (incoming)`, dan aturan `22/tcp ALLOW IN Anywhere`.
+
+💡 Urutannya penting: aturan SSH harus ada **sebelum** `enable`, supaya firewall tidak memutus sesi SSH-mu sendiri.
+
+⚠️ Jangan menjalankan `ufw enable` sebelum `ufw allow` port SSH.
+
+---
+
+### Soal 7 — SSH hardening
+
+> 📝 **Soal:** Cadangkan `/etc/ssh/sshd_config`, lalu tolak login SSH sebagai root (`PermitRootLogin no`). Periksa sintaksnya, terapkan perubahan, dan buktikan nilainya aktif tanpa menutup sesi yang sedang berjalan.
+
+✅ **Jawaban**
+
+```bash
+sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+sudo nano /etc/ssh/sshd_config
+```
+
+Ubah (atau tambahkan) baris:
+
+```text
+PermitRootLogin no
+```
+
+Lalu:
+
+```bash
+sudo sshd -t
+sudo systemctl restart ssh
+sudo sshd -T | grep -i permitrootlogin
+```
+
+`sshd -t` tidak menampilkan apa pun (berarti sintaks aman), dan `sshd -T` menampilkan `permitrootlogin no`.
+
+💡 Mengganti `Port` ke port lain hanya lapisan tambahan, bukan pengaman utama. Kalau port diganti, buka dulu di `ufw` (`sudo ufw allow <port>/tcp`) dan uji login lewat **terminal baru** sebelum menutup sesi lama. Di Ubuntu 24.04 perubahan port bisa memerlukan `ssh.socket` (`systemctl daemon-reload`).
+
+⚠️ Jangan tutup sesi aktif sebelum login lewat konfigurasi baru terbukti berhasil. Jika ada masalah, kembalikan dengan `sudo cp /etc/ssh/sshd_config.bak /etc/ssh/sshd_config`.
+
+---
+
+### Soal 8 — Konsep (penjelasan)
+
+> 📝 **Soal:** (a) Sebutkan tiga komponen CIA Triad dan beri satu contoh pelanggaran untuk masing-masing. (b) Sebutkan komponen AAA dan perintah di soal sebelumnya yang mewakili masing-masing. (c) Bedakan DAC dan MAC. (d) Apa itu *least privilege* dan di soal mana kamu menerapkannya?
+
+✅ **Jawaban**
+
+**(a)** *Confidentiality*: file rahasia terbaca orang yang tidak berhak (misalnya ACL terlalu longgar). *Integrity*: data diubah diam-diam (misalnya file dimodifikasi tanpa jejak). *Availability*: data tidak bisa dipakai saat dibutuhkan (misalnya akun terkunci atau firewall memutus SSH).
+
+**(b)** *Authentication* (kamu siapa): login dengan password, status akun `passwd -S`. *Authorization* (boleh apa): izin file, ACL, aturan `sudoers`. *Accounting* (apa yang sudah dilakukan): `journalctl`.
+
+**(c)** **DAC**: pemilik file yang menentukan akses (rwx, ACL, sudo), dan root bisa melewatinya. **MAC**: aturan per program yang dipaksakan sistem, berlaku bahkan untuk root (AppArmor di Ubuntu, SELinux di Red Hat).
+
+**(d)** *Least privilege* = setiap user dan program hanya diberi hak seminimal yang cukup. Diterapkan di Soal 2 (sudo hanya untuk `apt update`) dan Soal 3 (ACL hanya hak baca).
+
+<p align="right"><a href="#top">⬆️ kembali ke atas</a></p>
+
+---
+
+<a id="contekan-modul-8"></a>
+
+## 📌 Contekan Modul 8
 
 ### Command kunci
 
@@ -2717,6 +2921,8 @@ SSTF: 100 -> 95 -> 119 -> 123 -> 180 -> 64 -> 62 -> 34 -> 11
 | `ufw enable` sebelum mengizinkan SSH | `ufw allow` port SSH **dulu**, baru `ufw enable` (kalau tidak, koneksi SSH sendiri tertutup) |
 | menutup sesi SSH sebelum login port baru berhasil | tes login lewat port baru dulu |
 | menekan `Q` saat `visudo` bertanya "What now?" | tekan `e` untuk mengedit ulang |
+| `passwd -u` pada akun tanpa password | isi password dulu, baru kunci dan buka |
+| mengunci akun `magang` saat latihan | pakai user uji (`tamu`) |
 
 ### Semua modul
 
@@ -2770,7 +2976,9 @@ SSTF: 100 -> 95 -> 119 -> 123 -> 180 -> 64 -> 62 -> 34 -> 11
 - [ ] Bisa alur disk: `lsblk` → `mount` → `df` → `umount`, dan beda hard link vs soft link (`ls -li`)
 - [ ] Bedakan `df` dan `du`, `dd count=200` (bukan `200M`), dan efek `sync`
 - [ ] Bisa menghitung total FCFS dan SSTF (jumlah selisih mutlak)
-- [ ] Hafal CIA, AAA, DAC vs MAC, dan urutan aman `ufw allow` → `ufw enable`
+- [ ] Hafal CIA, AAA, DAC vs MAC, dan least privilege
+- [ ] Hafal urutan aman `ufw allow` → `ufw enable`, dan `sshd -t` sebelum restart SSH
+- [ ] Bisa `setfacl -m` / `-x` + `getfacl`, `aa-complain` vs `aa-enforce`, dan `visudo -f` + `sudo -l -U`
 
 **Umum**
 
@@ -2782,6 +2990,6 @@ SSTF: 100 -> 95 -> 119 -> 123 -> 180 -> 64 -> 62 -> 34 -> 11
 
 **Semangat untuk pengujian akhirnya! 🚀**
 
-<sub>Semua modul (2 sampai 8) sudah tercakup. Modul 8 baru berupa ringkasan, tambahkan soal latihannya jika sudah dikerjakan.</sub>
+<sub>Semua modul (2 sampai 8) sudah tercakup.</sub>
 
 </div>
